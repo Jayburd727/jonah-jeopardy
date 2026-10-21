@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Jonah Jeopardy</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐟</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Libre+Baskerville:wght@700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- ============ SETUP SCREEN ============ -->
+  <section id="setup" class="screen active">
+    <div class="ocean" aria-hidden="true">
+      <div class="fish f1">🐟</div><div class="fish f2">🐠</div><div class="fish f3">🐡</div>
+      <div class="wave w1"></div><div class="wave w2"></div><div class="wave w3"></div>
+    </div>
+    <div class="setup-card">
+      <h1 class="logo" id="logo"></h1>
+      <p class="subtitle" id="subtitle"></p>
+
+      <div class="team-setup">
+        <div class="team-count">
+          <span>Teams</span>
+          <button class="round-btn" id="teamMinus" aria-label="Fewer teams">−</button>
+          <strong id="teamCountLabel">3</strong>
+          <button class="round-btn" id="teamPlus" aria-label="More teams">+</button>
+        </div>
+        <div id="teamInputs" class="team-inputs"></div>
+      </div>
+
+      <div class="setup-actions">
+        <button class="big-btn" id="startBtn">Start Game</button>
+        <button class="big-btn ghost hidden" id="resumeBtn">Resume Saved Game</button>
+      </div>
+      <p class="hint">Tip: press <kbd>F</kbd> for fullscreen on the projector.</p>
+    </div>
+  </section>
+
+  <!-- ============ BOARD SCREEN ============ -->
+  <section id="boardScreen" class="screen">
+    <header class="topbar">
+      <div class="topbar-title" id="boardTitle"></div>
+      <div class="topbar-actions">
+        <button class="pill" id="finalBtn">⭐ Final Jeopardy</button>
+        <button class="pill icon" id="soundBtn" title="Sound on/off">🔊</button>
+        <button class="pill icon" id="fsBtn" title="Fullscreen (F)">⛶</button>
+        <button class="pill icon" id="newGameBtn" title="New game">↺</button>
+      </div>
+    </header>
+    <main id="board" class="board"></main>
+    <footer id="scoreboard" class="scoreboard"></footer>
+  </section>
+
+  <!-- ============ CLUE OVERLAY ============ -->
+  <div id="clueOverlay" class="overlay hidden">
+    <div class="clue-header">
+      <span id="clueCategory"></span>
+      <span id="clueValue"></span>
+    </div>
+
+    <!-- Daily Double splash + wager -->
+    <div id="ddStage" class="dd-stage hidden">
+      <div class="dd-title">DAILY<br>DOUBLE!</div>
+      <div class="dd-wager">
+        <label>Which team?</label>
+        <div id="ddTeams" class="dd-teams"></div>
+        <label for="ddWagerInput">Wager <small id="ddMax"></small></label>
+        <input id="ddWagerInput" type="number" min="0" step="100" inputmode="numeric">
+        <button class="big-btn" id="ddGoBtn">Show the Clue</button>
+      </div>
+    </div>
+
+    <!-- Clue / answer -->
+    <div id="clueStage" class="clue-stage">
+      <div id="clueText" class="clue-text"></div>
+      <div id="answerBox" class="answer-box hidden">
+        <div id="answerText" class="answer-text"></div>
+        <div id="answerRef" class="answer-ref"></div>
+      </div>
+      <div class="timer-wrap"><div id="timerBar" class="timer-bar"></div></div>
+    </div>
+
+    <div class="clue-controls">
+      <div id="scoreButtons" class="score-buttons hidden"></div>
+      <div class="control-row">
+        <button class="pill" id="timerBtn">⏱ Timer <kbd>T</kbd></button>
+        <button class="pill gold" id="revealBtn">Reveal Answer <kbd>Space</kbd></button>
+        <button class="pill" id="backBtn">Back to Board <kbd>B</kbd></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ FINAL JEOPARDY OVERLAY ============ -->
+  <div id="finalOverlay" class="overlay final hidden">
+    <div class="clue-header"><span>FINAL JEOPARDY</span><span id="finalCatSmall"></span></div>
+
+    <div id="finalCatStage" class="final-stage">
+      <div class="final-label">The category is…</div>
+      <div id="finalCategory" class="final-category"></div>
+      <div id="finalWagers" class="final-wagers"></div>
+      <button class="big-btn" id="finalShowClueBtn">Lock In Wagers &amp; Show Clue</button>
+    </div>
+
+    <div id="finalClueStage" class="final-stage hidden">
+      <div id="finalClueText" class="clue-text"></div>
+      <div id="finalAnswerBox" class="answer-box hidden">
+        <div id="finalAnswerText" class="answer-text"></div>
+        <div id="finalAnswerRef" class="answer-ref"></div>
+      </div>
+      <div class="timer-wrap"><div id="finalTimerBar" class="timer-bar"></div></div>
+      <div id="finalJudging" class="final-judging hidden"></div>
+      <div class="control-row">
+        <button class="pill" id="finalTimerBtn">⏱ 30 Seconds</button>
+        <button class="pill gold" id="finalRevealBtn">Reveal Answer</button>
+        <button class="pill gold hidden" id="finalWinnerBtn">🏆 Show the Winner</button>
+      </div>
+    </div>
+    <button class="pill close-final" id="finalCloseBtn">✕ Back to Board</button>
+  </div>
+
+  <!-- ============ WINNER SCREEN ============ -->
+  <div id="winnerOverlay" class="overlay winner hidden">
+    <div class="ocean" aria-hidden="true">
+      <div class="wave w1"></div><div class="wave w2"></div><div class="wave w3"></div>
+    </div>
+    <div class="winner-content">
+      <div class="winner-label">And the winner is…</div>
+      <div id="winnerName" class="winner-name"></div>
+      <div id="finalStandings" class="final-standings"></div>
+      <div id="teaser" class="teaser"></div>
+      <button class="pill" id="winnerCloseBtn">Back to Board</button>
+    </div>
+  </div>
+
+  <canvas id="confetti" aria-hidden="true"></canvas>
+
+  <script src="questions.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>
