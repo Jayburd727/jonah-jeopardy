@@ -147,6 +147,8 @@ kbd {
 .pill:hover { background: rgba(255, 255, 255, .22); }
 .pill:active { transform: scale(.96); }
 .pill.icon { padding: .45rem .8rem; }
+.music-btn.off { opacity: .45; text-decoration: line-through; }
+.setup-music { position: absolute; top: 1rem; right: 1rem; z-index: 2; }
 .pill.gold { background: var(--gold); color: var(--navy-deep); border-color: var(--gold); }
 .pill.gold:hover { background: #ffe066; }
 #finalBtn.ready { background: var(--gold); color: var(--navy-deep); animation: pulse 1.2s ease-in-out infinite; }

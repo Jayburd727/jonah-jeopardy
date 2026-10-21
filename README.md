@@ -16,10 +16,12 @@ A Jeopardy-style review game on **Jonah chapters 1–3**, built for youth group.
 | Key | Action |
 |-----|--------|
 | `F` | Fullscreen |
+| `M` | Music on/off |
 | `Space` | Reveal answer |
 | `T` | Start the 15-second timer |
 | `B` / `Esc` | Back to board |
 
+- Background music plays on the board, goes quiet while a clue is up, and switches to a "thinking" tune during the Final Jeopardy timer. Toggle it with 🎵 or `M`.
 - Click a team's score to adjust it by hand.
 - Click a used tile to reopen it and fix the scoring.
 - Progress saves automatically, so if the browser refreshes, click **Resume Saved Game**.

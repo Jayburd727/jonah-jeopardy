@@ -128,10 +128,165 @@ const sfx = {
 };
 
 // ------------------------------------------------------------
+//  Background music (original tunes, synthesized live)
+// ------------------------------------------------------------
+const MUSIC_PREF_KEY = "jonahJeopardyMusic";
+let musicOn = (() => { try { return localStorage.getItem(MUSIC_PREF_KEY) !== "off"; } catch (e) { return true; } })();
+
+const midi = (n) => 440 * Math.pow(2, (n - 69) / 12);
+let noiseBuffer = null;
+
+function voice(dest, freq, t, dur, { type = "sine", vol = 0.2 } = {}) {
+  const ac = audioCtx;
+  const osc = ac.createOscillator();
+  const g = ac.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, t);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(vol, t + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  osc.connect(g).connect(dest);
+  osc.start(t);
+  osc.stop(t + dur + 0.05);
+}
+
+function shaker(dest, t, vol) {
+  const ac = audioCtx;
+  if (!noiseBuffer) {
+    noiseBuffer = ac.createBuffer(1, ac.sampleRate * 0.1, ac.sampleRate);
+    const d = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  }
+  const src = ac.createBufferSource();
+  src.buffer = noiseBuffer;
+  const hp = ac.createBiquadFilter();
+  hp.type = "highpass";
+  hp.frequency.value = 6000;
+  const g = ac.createGain();
+  g.gain.setValueAtTime(vol, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.06);
+  src.connect(hp).connect(g).connect(dest);
+  src.start(t);
+  src.stop(t + 0.1);
+}
+
+// Steel-drum-ish note: fundamental plus a bright overtone
+function steelDrum(dest, n, t, vol = 0.12) {
+  voice(dest, midi(n), t, 0.35, { vol });
+  voice(dest, midi(n) * 2.01, t, 0.15, { vol: vol * 0.35 });
+}
+
+const SONGS = {
+  // Easy-going island groove for the board
+  board: {
+    stepDur: 60 / 112 / 2,  // eighth notes at 112 bpm
+    bars: [
+      { chord: [60, 64, 67], bass: 36, mel: [76, null, 79, null, 84, null, 79, 76] },
+      { chord: [57, 60, 64], bass: 33, mel: [76, null, 72, null, 69, 72, 76, null] },
+      { chord: [53, 57, 60], bass: 41, mel: [77, null, 81, null, 84, null, 81, 77] },
+      { chord: [55, 59, 62], bass: 43, mel: [79, 77, 76, 74, 71, null, 74, null] },
+      { chord: [60, 64, 67], bass: 36, mel: [76, null, 79, null, 84, null, 86, 84] },
+      { chord: [57, 60, 64], bass: 33, mel: [81, null, 79, null, 76, null, 72, null] },
+      { chord: [53, 57, 60], bass: 41, mel: [77, null, 76, null, 74, null, 71, null] },
+      { chord: [60, 64, 67], bass: 36, mel: [72, null, null, null, null, 76, 79, null] },
+    ],
+    play(dest, step, t) {
+      const bar = this.bars[Math.floor(step / 8) % this.bars.length];
+      const s = step % 8;
+      if (s === 0 || s === 3) voice(dest, midi(bar.bass), t, 0.3, { type: "triangle", vol: 0.28 });
+      if (s === 4) voice(dest, midi(bar.bass + 7), t, 0.25, { type: "triangle", vol: 0.22 });
+      if (s === 6) voice(dest, midi(bar.bass + 12), t, 0.2, { type: "triangle", vol: 0.2 });
+      if (s % 2 === 1) bar.chord.forEach((n) => voice(dest, midi(n), t, 0.12, { type: "triangle", vol: 0.035 }));
+      shaker(dest, t, s % 2 ? 0.05 : 0.025);
+      const m = bar.mel[s];
+      if (m) steelDrum(dest, m, t);
+    },
+  },
+  // Tick-tock suspense for the Final Jeopardy timer
+  think: {
+    stepDur: 60 / 120 / 2,
+    bass: [45, 45, 52, 52, 41, 41, 52, 52, 45, 45, 52, 52, 40, 40, 44, 44],
+    mel: [69, null, 72, null, 76, null, 74, 72, 71, null, 72, null, 74, null, null, null,
+          69, null, 72, null, 76, null, 77, 76, 74, null, 71, null, 69, null, null, null],
+    play(dest, step, t) {
+      const s = step % 32;
+      if (s % 2 === 0) voice(dest, midi(this.bass[s / 2]), t, 0.22, { type: "triangle", vol: 0.25 });
+      shaker(dest, t, s % 2 ? 0.02 : 0.06);
+      voice(dest, s % 2 ? 1500 : 1000, t, 0.03, { type: "square", vol: 0.02 });
+      const m = this.mel[s];
+      if (m) voice(dest, midi(m), t, 0.3, { type: "triangle", vol: 0.09 });
+    },
+  },
+};
+
+const music = {
+  current: null, gain: null, timer: null, step: 0, nextTime: 0,
+
+  play(name) {
+    if (!musicOn) return;
+    const ac = ctx();
+    if (!ac || this.current === name) return;
+    this.stop(true);
+    this.current = name;
+    this.gain = ac.createGain();
+    this.gain.gain.setValueAtTime(0.0001, ac.currentTime);
+    this.gain.gain.exponentialRampToValueAtTime(0.5, ac.currentTime + 1.2);
+    this.gain.connect(ac.destination);
+    this.step = 0;
+    this.nextTime = ac.currentTime + 0.1;
+    const song = SONGS[name];
+    const dest = this.gain;
+    // Schedule notes a little ahead of time so playback stays smooth
+    this.timer = setInterval(() => {
+      while (this.nextTime < ac.currentTime + 0.2) {
+        song.play(dest, this.step, this.nextTime);
+        this.nextTime += song.stepDur;
+        this.step++;
+      }
+    }, 50);
+  },
+
+  stop(quick = false) {
+    if (!this.current) return;
+    clearInterval(this.timer);
+    const ac = audioCtx;
+    const g = this.gain;
+    const fade = quick ? 0.15 : 0.6;
+    g.gain.cancelScheduledValues(ac.currentTime);
+    g.gain.setValueAtTime(Math.max(g.gain.value, 0.0001), ac.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + fade);
+    setTimeout(() => g.disconnect(), fade * 1000 + 600);
+    this.current = null;
+  },
+};
+
+// Which tune fits whatever is on screen right now
+function musicForScreen() {
+  const visible = (id) => !$(id).classList.contains("hidden");
+  if (visible("clueOverlay") || visible("finalOverlay")) return null;
+  return "board";
+}
+
+function toggleMusic() {
+  musicOn = !musicOn;
+  try { localStorage.setItem(MUSIC_PREF_KEY, musicOn ? "on" : "off"); } catch (e) {}
+  updateMusicButtons();
+  if (musicOn) { const s = musicForScreen(); if (s) music.play(s); }
+  else music.stop();
+}
+
+function updateMusicButtons() {
+  document.querySelectorAll(".music-btn").forEach((b) => {
+    b.classList.toggle("off", !musicOn);
+    b.title = musicOn ? "Music on (M)" : "Music off (M)";
+  });
+}
+
+// ------------------------------------------------------------
 //  Timer
 // ------------------------------------------------------------
 let timerRAF = null;
-function startTimer(barEl, seconds) {
+function startTimer(barEl, seconds, onDone = null) {
   stopTimer();
   const wrap = barEl.parentElement;
   wrap.classList.add("on");
@@ -144,7 +299,7 @@ function startTimer(barEl, seconds) {
     barEl.classList.toggle("low", left <= 5);
     const whole = Math.ceil(left);
     if (left <= 5 && whole !== lastTick && left > 0) { lastTick = whole; sfx.tick(); }
-    if (left <= 0) { sfx.timesUp(); timerRAF = null; return; }
+    if (left <= 0) { if (onDone) onDone(); sfx.timesUp(); timerRAF = null; return; }
     timerRAF = requestAnimationFrame(step);
   };
   timerRAF = requestAnimationFrame(step);
@@ -205,6 +360,7 @@ function enterBoard() {
   showScreen("boardScreen");
   renderBoard();
   renderScores();
+  music.play("board");
 }
 
 // ------------------------------------------------------------
@@ -280,6 +436,7 @@ function openClue(c, r) {
   const clue = CATEGORIES[c].clues[r];
   current = { c, r, key };
   stopTimer();
+  music.stop();
 
   $("clueCategory").textContent = CATEGORIES[c].name;
   $("clueText").textContent = clue.q;
@@ -381,6 +538,7 @@ function closeClue() {
   $("clueOverlay").classList.add("hidden");
   renderBoard();
   renderScores();
+  music.play("board");
 }
 
 // ------------------------------------------------------------
@@ -439,6 +597,7 @@ function openFinal() {
   if (remaining > 0 && !state.final.locked &&
       !confirm(`There are still ${remaining} clues on the board. Go to Final Jeopardy anyway?`)) return;
 
+  music.stop();
   const ov = $("finalOverlay");
   ov.classList.remove("hidden");
   ov.style.animation = "none"; void ov.offsetWidth; ov.style.animation = "";
@@ -506,6 +665,7 @@ function showFinalClue(resumed) {
 
 function revealFinal() {
   stopTimer();
+  music.stop(true);
   sfx.reveal();
   $("finalAnswerBox").classList.remove("hidden");
   $("finalJudging").classList.remove("hidden");
@@ -566,9 +726,12 @@ function showWinner() {
   ov.querySelectorAll(".winner-name, .teaser").forEach((el) => {
     el.style.animation = "none"; void el.offsetWidth; el.style.animation = "";
   });
+  music.stop(true);
   sfx.win();
   confetti(7000, 260);
   renderScores();
+  // Celebration groove kicks in after the fanfare
+  setTimeout(() => { if (!$("winnerOverlay").classList.contains("hidden")) music.play("board"); }, 2600);
 }
 
 // ------------------------------------------------------------
@@ -639,6 +802,7 @@ function newGame() {
   if (!confirm("Start a brand new game? Current scores will be erased.")) return;
   clearSave();
   state = null;
+  music.stop();
   $("resumeBtn").classList.add("hidden");
   showScreen("setup");
 }
@@ -670,10 +834,26 @@ function init() {
   $("ddWagerInput").addEventListener("keydown", (e) => { if (e.key === "Enter") lockDailyDouble(); });
 
   $("finalShowClueBtn").onclick = lockFinalWagers;
-  $("finalTimerBtn").onclick = () => startTimer($("finalTimerBar"), FINAL_SECONDS);
+  $("finalTimerBtn").onclick = () => {
+    music.stop(true);
+    setTimeout(() => music.play("think"), 200);
+    startTimer($("finalTimerBar"), FINAL_SECONDS, () => music.stop(true));
+  };
   $("finalRevealBtn").onclick = revealFinal;
   $("finalWinnerBtn").onclick = showWinner;
-  $("finalCloseBtn").onclick = () => { stopTimer(); $("finalOverlay").classList.add("hidden"); renderScores(); };
+  $("finalCloseBtn").onclick = () => { stopTimer(); $("finalOverlay").classList.add("hidden"); renderScores(); music.play("board"); };
+
+  document.querySelectorAll(".music-btn").forEach((b) => (b.onclick = toggleMusic));
+  updateMusicButtons();
+
+  // Browsers only allow audio after the first click, so start the title music then
+  const kickoff = (e) => {
+    document.removeEventListener("pointerdown", kickoff);
+    if (e.target.closest(".music-btn")) return;
+    const s = musicForScreen();
+    if (s) music.play(s);
+  };
+  document.addEventListener("pointerdown", kickoff);
   $("winnerCloseBtn").onclick = () => $("winnerOverlay").classList.add("hidden");
 
   document.addEventListener("keydown", (e) => {
@@ -681,6 +861,7 @@ function init() {
     const clueOpen = !$("clueOverlay").classList.contains("hidden");
     const clueVisible = clueOpen && !$("clueStage").classList.contains("hidden");
     if (e.key === "f" || e.key === "F") toggleFullscreen();
+    else if (e.key === "m" || e.key === "M") toggleMusic();
     else if ((e.key === "Escape" || e.key === "b" || e.key === "B") && clueOpen) closeClue();
     else if (e.key === " " && clueVisible) { e.preventDefault(); revealAnswer(); }
     else if ((e.key === "t" || e.key === "T") && clueVisible) startTimer($("timerBar"), CLUE_SECONDS);
